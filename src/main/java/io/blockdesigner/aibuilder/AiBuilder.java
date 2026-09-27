@@ -103,6 +103,20 @@ public final class AiBuilder {
     }
 
     void start() {
+        // BlockDesigner's Settings window keeps the settings from now on; the file's values move there once.
+        AiSettings before = AiSettings.load(settingsFile);
+        boolean hadFile = java.nio.file.Files.isRegularFile(settingsFile);
+        ctx.registerSettings(AiOptions.OPTIONS, v -> {
+            AiOptions.apply(v, settings);
+            saveSettings();
+        });
+        if (!before.migratedToApp) {
+            settings.migratedToApp = true;
+            if (hadFile) {
+                ctx.updateSettings(v -> AiOptions.values(v, before));
+                saveSettings();
+            }
+        }
         ctx.registerPanel(new AssistantPanel(this));
         ctx.registerPanel(new ModelsPanel(this));
         server.onStatus(s -> changed());
@@ -136,6 +150,16 @@ public final class AiBuilder {
     /** Pages listen here for any change worth redrawing (downloads, server state, settings). */
     public void onChange(Runnable r) {
         listeners.add(r);
+    }
+
+    /** A page that is gone stops listening. */
+    public void removeListener(Runnable r) {
+        listeners.remove(r);
+    }
+
+    /** Changes settings the Settings window shows, as if the user had (the page there redraws). */
+    public void updateSettings(java.util.function.UnaryOperator<io.blockdesigner.plugin.OptionValues> change) {
+        ctx.updateSettings(change);
     }
 
     public void changed() {
@@ -183,9 +207,9 @@ public final class AiBuilder {
             case LOCAL_SERVER -> new OpenAiCompatibleClient(http, URI.create(s.localServerUrl.strip()), null, s.localServerModel,
                     s.localServerVision, (s.localServerModel.isBlank() ? "Local server" : s.localServerModel), 0.3);
             case CLAUDE -> new AnthropicClient(http, AnthropicClient.defaultBase(), secrets.load("anthropic").orElseThrow(() ->
-                    new IOException("Add your Anthropic API key on the Models page (Advanced)")), s.claudeModel);
+                    new IOException("Add your Anthropic API key on the Models page")), s.claudeModel);
             case OPENAI -> new OpenAiCompatibleClient(http, URI.create(s.openaiUrl.strip()), secrets.load("openai").orElseThrow(() ->
-                    new IOException("Add your OpenAI API key on the Models page (Advanced)")), s.openaiModel, true,
+                    new IOException("Add your OpenAI API key on the Models page")), s.openaiModel, true,
                     "OpenAI-compatible (" + s.openaiModel + ")", null);
         };
     }

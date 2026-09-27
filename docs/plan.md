@@ -3,6 +3,13 @@
 > **Status (2026-09-27):** phases 1–5 are built and unit tested (78 tests, `./gradlew jar test`). Phase 6, trying it in the app and
 > releasing, is next and is the user's. Nothing is committed. See [the checklist](#status-checklist) at the end.
 
+> **0.2.0 (UI overhaul, API 6, needs BlockDesigner 0.4.24):** the set-once settings moved to BlockDesigner's Settings
+> window (`AiOptions`: provider and connection details, engine kind, start at launch, idle stop, Default style,
+> context size and most blocks per answer; `AiSettings.migratedToApp` moves an older settings file over once). The
+> Assistant and Models pages are built with the UI kit: controls at the top, the chat or model cards in the middle,
+> status and errors at the bottom; the Models page shows only what the chosen source needs, and API keys save on Enter.
+> Page status dots while answering, listeners removed on dispose. 82 tests.
+
 ## Context
 
 The user wants a BlockDesigner plugin that builds 3D Minecraft structures from a text prompt or a reference image,

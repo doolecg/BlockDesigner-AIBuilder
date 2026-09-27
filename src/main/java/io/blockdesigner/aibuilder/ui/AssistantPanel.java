@@ -6,7 +6,6 @@ import io.blockdesigner.aibuilder.agent.Assistant;
 import io.blockdesigner.aibuilder.agent.SceneSummary;
 import io.blockdesigner.aibuilder.agent.Scope;
 import io.blockdesigner.aibuilder.build.BuildRunner;
-import io.blockdesigner.aibuilder.build.Styles;
 import io.blockdesigner.aibuilder.image.Attachment;
 import io.blockdesigner.aibuilder.image.ImageHints;
 import io.blockdesigner.aibuilder.llm.Cancel;
@@ -18,20 +17,27 @@ import io.blockdesigner.plugin.PanelContext;
 import io.blockdesigner.plugin.PluginPanel;
 import io.blockdesigner.plugin.SceneEvent;
 import io.blockdesigner.plugin.Subscription;
-import javafx.geometry.Insets;
+import io.blockdesigner.plugin.ui.ActionBar;
+import io.blockdesigner.plugin.ui.Banner;
+import io.blockdesigner.plugin.ui.Controls;
+import io.blockdesigner.plugin.ui.Icon;
+import io.blockdesigner.plugin.ui.PanelScaffold;
+import io.blockdesigner.plugin.ui.Section;
+import io.blockdesigner.plugin.ui.Theme;
+import io.blockdesigner.plugin.ui.Tone;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
-import javafx.scene.control.TitledPane;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.TransferMode;
-import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 
@@ -44,19 +50,23 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The Assistant page: a chat. Each request is one turn: the reply streams in, the commands it ran are listed (and
- * can be opened), and "Undo this" takes the turn back. A picture can be attached or dropped on the page.
+ * The Assistant page: what to work on at the top, then the chat. Each request is one turn: the reply streams in, the
+ * commands it ran can be opened, and "Undo this" takes the turn back. At the bottom: errors, what it is doing, the
+ * message box, and Attach · Stop · Send. A picture can be attached or dropped on the page. Until a model is there, the
+ * page offers to download the recommended one.
  */
 public final class AssistantPanel implements PluginPanel {
     private final AiBuilder app;
     private final List<Subscription> subscriptions = new ArrayList<>();
+    private final Runnable listener = this::refreshGetModel;
     private PanelContext panel;
     private VBox transcript;
-    private ScrollPane scroll;
     private TextArea input;
     private Button send, stop, attach;
     private Label scopeLine, status, attachmentChip;
-    private VBox banner;
+    private HBox attachmentRow;
+    private VBox getModel;
+    private Banner banner;
     private ComboBox<Scope.Choice> scopeChoice;
     private Attachment attachment;
     private Cancel running;
@@ -83,69 +93,80 @@ public final class AssistantPanel implements PluginPanel {
     @Override
     public Node create(PanelContext context) {
         this.panel = context;
-        scopeLine = Ui.muted("");
+
+        // What to work on.
         scopeChoice = new ComboBox<>();
         scopeChoice.getItems().setAll(Scope.Choice.values());
         scopeChoice.setValue(Scope.Choice.AUTO);
         scopeChoice.setCellFactory(l -> choiceCell());
         scopeChoice.setButtonCell(choiceCell());
         scopeChoice.setOnAction(e -> refreshScope());
-        ComboBox<String> style = new ComboBox<>();
-        style.getItems().add("auto");
-        Styles.all().forEach(s -> style.getItems().add(s.name()));
-        style.setValue(style.getItems().contains(app.settings.style) ? app.settings.style : "auto");
-        style.setOnAction(e -> {
-            app.settings.style = style.getValue();
-            app.saveSettings();
-        });
-        Button clear = Ui.button("New chat", this::newChat);
-        HBox controls = new HBox(6, new Label("Work on"), scopeChoice, new Label("Style"), style, Ui.grow(), clear);
-        controls.setAlignment(Pos.CENTER_LEFT);
+        scopeChoice.setMaxWidth(Double.MAX_VALUE);
+        scopeChoice.setMinWidth(0);
+        scopeChoice.setAccessibleText("Work on");
+        HBox.setHgrow(scopeChoice, Priority.ALWAYS);
+        Label workOn = new Label("Work on");
+        workOn.setMinWidth(Region.USE_PREF_SIZE);
+        workOn.setLabelFor(scopeChoice);
+        HBox scopeRow = new HBox(Theme.SM, workOn, scopeChoice, Controls.iconButton(Icon.EDIT, "New chat", this::newChat));
+        scopeRow.setAlignment(Pos.CENTER_LEFT);
+        scopeLine = Controls.caption("");
+        scopeLine.setWrapText(true);
 
-        banner = new VBox(6);
-        transcript = new VBox(10);
-        transcript.setPadding(new Insets(4));
-        scroll = new ScrollPane(transcript);
+        // The chat.
+        getModel = new VBox(Theme.SM);
+        getModel.getStyleClass().add("bd-card");
+        transcript = new VBox(Theme.MD);
+        ScrollPane scroll = new ScrollPane(transcript);
         scroll.setFitToWidth(true);
-        VBox.setVgrow(scroll, Priority.ALWAYS);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.getStyleClass().addAll("bd-scroll", "edge-to-edge");
         transcript.heightProperty().addListener((o, a, b) -> scroll.setVvalue(1));
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        VBox chat = new VBox(Theme.MD, getModel, scroll);
 
+        // Writing.
+        banner = new Banner();
+        status = Controls.caption("");
         input = new TextArea();
         input.setPromptText("Ask for a build or a change: \"build a small castle\", \"add a tower on the east side\"…  (Enter sends, Shift+Enter for a new line)");
         input.setWrapText(true);
         input.setPrefRowCount(3);
+        input.setAccessibleText("Message");
         input.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ENTER && !e.isShiftDown()) {
                 e.consume();
                 send();
             }
         });
-        send = Ui.accent("Send", this::send);
-        stop = Ui.button("Stop", () -> {
+        attachmentChip = Controls.caption("");
+        attachmentRow = new HBox(Theme.XS, Icon.PAPERCLIP.node(14), attachmentChip,
+                Controls.iconButton(Icon.CLOSE, "Remove the picture", () -> setAttachment(null)));
+        attachmentRow.setAlignment(Pos.CENTER_LEFT);
+        ((Button) attachmentRow.getChildren().getLast()).getStyleClass().add("small");
+        Controls.show(attachmentRow, false);
+        send = Controls.primary("Send", this::send);
+        stop = Controls.button("Stop", "Stop this answer (nothing is changed)", () -> {
             if (running != null) running.cancel();
         });
         stop.setDisable(true);
-        attach = Ui.button("Attach image", this::chooseImage);
-        attachmentChip = new Label();
-        attachmentChip.setOnMouseClicked(e -> setAttachment(null));
-        status = Ui.muted("");
-        HBox buttons = new HBox(6, attach, attachmentChip, Ui.grow(), stop, send);
-        buttons.setAlignment(Pos.CENTER_LEFT);
+        attach = Controls.iconButton(Icon.PAPERCLIP, "Attach a picture…", this::chooseImage);
 
-        VBox top = new VBox(6, controls, scopeLine, banner);
-        VBox bottom = new VBox(6, status, input, buttons);
-        BorderPane root = new BorderPane(scroll, top, null, bottom, null);
-        root.setPadding(new Insets(10));
-        BorderPane.setMargin(scroll, new Insets(8, 0, 8, 0));
+        PanelScaffold page = new PanelScaffold()
+                .top(scopeRow, scopeLine)
+                .grow(chat)
+                .footer(banner, status, attachmentRow, input, new ActionBar(attach, Controls.spacer(), stop, send));
+        // The label goes when the page is narrow; the choice says it well enough.
+        page.narrowProperty().addListener((o, a, narrow) -> Controls.show(workOn, !narrow));
 
         // Pictures dropped on the page are attached.
-        root.setOnDragOver(e -> {
+        page.setOnDragOver(e -> {
             if (e.getDragboard().hasFiles() && e.getDragboard().getFiles().stream().anyMatch(AssistantPanel::isImage)) {
                 e.acceptTransferModes(TransferMode.COPY);
             }
             e.consume();
         });
-        root.setOnDragDropped(e -> {
+        page.setOnDragDropped(e -> {
             e.getDragboard().getFiles().stream().filter(AssistantPanel::isImage).findFirst().ifPresent(f -> loadImage(f.toPath()));
             e.setDropCompleted(true);
             e.consume();
@@ -154,15 +175,15 @@ public final class AssistantPanel implements PluginPanel {
         subscriptions.add(app.ctx.on(SceneEvent.SelectionChanged.class, e -> refreshScope()));
         subscriptions.add(app.ctx.on(SceneEvent.LayersChanged.class, e -> refreshScope()));
         subscriptions.add(app.ctx.on(SceneEvent.ProjectOpened.class, e -> refreshScope()));
-        app.onChange(this::refreshBanner);
+        app.onChange(listener);
         context.onShown(() -> {
             refreshScope();
-            refreshBanner();
+            refreshGetModel();
         });
         refreshScope();
-        refreshBanner();
+        refreshGetModel();
         greet();
-        return root;
+        return page;
     }
 
     private static javafx.scene.control.ListCell<Scope.Choice> choiceCell() {
@@ -187,58 +208,76 @@ public final class AssistantPanel implements PluginPanel {
         scopeLine.setText(s.describe());
     }
 
-    /** The first-run call to action: download the recommended model. */
-    private void refreshBanner() {
-        if (banner == null) return;
-        banner.getChildren().clear();
-        if (app.settings.provider != AiSettings.Provider.BUILT_IN) return;
+    /** The first-run call to action: download the recommended model (or its progress while downloading). */
+    private void refreshGetModel() {
+        if (getModel == null) return;
+        getModel.getChildren().clear();
         ModelEntry e = app.activeModel().orElse(app.catalog.recommended());
-        if (app.store.installed(e)) return;
+        boolean need = app.settings.provider == AiSettings.Provider.BUILT_IN && !app.store.installed(e);
+        Controls.show(getModel, need);
+        if (!need) return;
         DownloadJob job = app.jobs.get(e.id());
-        VBox card = Ui.card();
+        Label title = new Label(job != null && !job.finished() ? "Downloading " + e.name() : "Get the AI model");
+        title.getStyleClass().add("bd-row-title");
         if (job != null && !job.finished()) {
-            javafx.scene.control.ProgressBar bar = new javafx.scene.control.ProgressBar(Math.max(0, job.progress().fraction()));
+            ProgressBar bar = new ProgressBar(Math.max(0, job.progress().fraction()));
+            bar.getStyleClass().add("bd-progress");
             bar.setMaxWidth(Double.MAX_VALUE);
-            card.getChildren().addAll(Ui.title("Downloading " + e.name()), bar, Ui.muted(job.progress().describe()),
-                    Ui.button("Cancel", job::cancel));
+            getModel.getChildren().addAll(title, bar, Controls.caption(job.progress().describe()),
+                    Controls.button("Cancel", "Stop the download (it resumes later)", job::cancel));
         } else {
-            Button get = Ui.accent("Download " + e.name() + " (" + Sizes.gb(e.totalSize()) + ")", () -> app.download(e));
-            Button models = Ui.button("Other models…", () -> app.ctx.toast("Open the Models page at the top of this tab"));
-            card.getChildren().addAll(Ui.title("Get the AI model"),
-                    Ui.wrap("AI Builder runs a model on your own PC. " + e.name() + " is free (" + e.licence() + ") and can look at pictures. "
-                            + "It downloads once, in the background, and resumes if interrupted. Or use your own local server or API key on the Models page."),
-                    new HBox(6, get, models));
-            if (job != null && job.progress().state() == DownloadJob.State.FAILED) card.getChildren().add(Ui.muted("Last try failed: " + job.progress().message()));
+            Button get = Controls.primary("Download " + e.name() + " (" + Sizes.gb(e.totalSize()) + ")", () -> app.download(e));
+            Button models = Controls.button("Other models…", "The Models page: other built-in models, your own server or an API key",
+                    () -> app.ctx.showPanel("models"));
+            get.setMinWidth(Region.USE_PREF_SIZE);
+            models.setMinWidth(Region.USE_PREF_SIZE);
+            // Side by side, or one under the other on a narrow page.
+            javafx.scene.layout.FlowPane buttons = new javafx.scene.layout.FlowPane(Theme.SM, Theme.SM, get, models);
+            getModel.getChildren().addAll(title,
+                    Controls.hint("AI Builder runs a model on your own PC. " + e.name() + " is free (" + e.licence() + ") and can look at "
+                            + "pictures. It downloads once, in the background, and resumes if interrupted."), buttons);
+            if (job != null && job.progress().state() == DownloadJob.State.FAILED) {
+                Label failed = Controls.hint("Last try failed: " + job.progress().message());
+                Tone.apply(failed, Tone.DANGER);
+                getModel.getChildren().add(failed);
+            }
         }
-        banner.getChildren().add(card);
     }
 
     private void greet() {
-        transcript.getChildren().add(bubble(Ui.muted("Describe what to build, or what to change. With something selected I work on the selection; "
-                + "otherwise on everything visible, or on a new layer when the scene is empty. Each answer is one undo step (Ctrl+Z, or Undo this)."), false));
+        transcript.getChildren().add(bubble(Controls.hint("Describe what to build, or what to change. With something selected I work on the "
+                + "selection; otherwise on everything visible, or on a new layer when the scene is empty. Each answer is one undo step "
+                + "(Ctrl+Z, or Undo this)."), false));
     }
 
     private void newChat() {
         if (running != null) return;
         app.assistant.clear();
         transcript.getChildren().clear();
+        banner.hide();
         greet();
     }
 
     private VBox bubble(Node content, boolean user) {
-        VBox b = new VBox(6, content);
-        b.setPadding(new Insets(8));
-        b.setStyle(user ? "-fx-background-color: -color-accent-subtle; -fx-background-radius: 8;"
-                : "-fx-background-color: -color-bg-subtle; -fx-background-radius: 8;");
+        VBox b = new VBox(Theme.SM, content);
+        b.getStyleClass().add("bd-card");
+        if (user) Tone.apply(b, Tone.ACCENT);
         b.setMaxWidth(Double.MAX_VALUE);
         return b;
+    }
+
+    private static Label text(String s) {
+        Label l = new Label(s);
+        l.setWrapText(true);
+        l.setMinHeight(Region.USE_PREF_SIZE);
+        return l;
     }
 
     private void chooseImage() {
         FileChooser fc = new FileChooser();
         fc.setTitle("Attach a reference picture");
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Pictures", Attachment.EXTENSIONS.stream().map(e -> "*." + e).toList()));
-        File f = fc.showOpenDialog(input.getScene() == null ? null : input.getScene().getWindow());
+        File f = fc.showOpenDialog(app.ctx.ui().owner());
         if (f != null) loadImage(f.toPath());
     }
 
@@ -248,15 +287,20 @@ public final class AssistantPanel implements PluginPanel {
                 Attachment a = Attachment.load(file);
                 app.ctx.runOnUiThread(() -> setAttachment(a));
             } catch (IOException e) {
-                app.ctx.runOnUiThread(() -> app.ctx.toast(e.getMessage()));
+                app.ctx.runOnUiThread(() -> banner.show(Tone.DANGER, e.getMessage()));
             }
         });
     }
 
     private void setAttachment(Attachment a) {
         attachment = a;
-        attachmentChip.setText(a == null ? "" : "Picture: " + a.describe() + "  ✕");
-        attachmentChip.setStyle(a == null ? "" : "-fx-background-color: -color-bg-inset; -fx-background-radius: 8; -fx-padding: 2 8 2 8; -fx-cursor: hand;");
+        attachmentChip.setText(a == null ? "" : "Picture: " + a.describe());
+        Controls.show(attachmentRow, a != null);
+    }
+
+    /** The dot on the Assistant page's button: working (with what), failed, or none. */
+    private void pageStatus(Tone tone, String text) {
+        app.ctx.setPanelStatus(id(), tone, text);
     }
 
     private void send() {
@@ -266,19 +310,22 @@ public final class AssistantPanel implements PluginPanel {
         Attachment image = attachment;
         input.clear();
         setAttachment(null);
+        banner.hide();
 
-        VBox userBubble = bubble(Ui.wrap(prompt.isEmpty() ? "(picture)" : prompt), true);
-        if (image != null) userBubble.getChildren().add(Ui.muted("Picture: " + image.describe()));
+        VBox userBubble = bubble(text(prompt.isEmpty() ? "(picture)" : prompt), true);
+        if (image != null) userBubble.getChildren().add(Controls.caption("Picture: " + image.describe()));
         transcript.getChildren().add(userBubble);
 
-        Label reply = Ui.wrap("");
-        Label turnStatus = Ui.muted("");
-        VBox aiBubble = bubble(new VBox(4, reply, turnStatus), false);
+        Label reply = text("");
+        Label turnStatus = Controls.caption("");
+        turnStatus.setWrapText(true);
+        VBox aiBubble = bubble(new VBox(Theme.XS, reply, turnStatus), false);
         transcript.getChildren().add(aiBubble);
 
         Cancel cancel = new Cancel();
         running = cancel;
         setBusy(true);
+        pageStatus(Tone.ACCENT, "Answering…");
         Scope.Choice choice = scopeChoice.getValue();
         String style = app.settings.style;
         int maxBlocks = app.settings.maxBlocks;
@@ -287,7 +334,7 @@ public final class AssistantPanel implements PluginPanel {
 
         app.workers.execute(() -> {
             try {
-                ChatClient client = app.client(m -> ui(() -> status.setText(m)));
+                ChatClient client = app.client(m -> ui(() -> working(m)));
                 String hints = null;
                 if (image != null) {
                     List<ImageHints.Hint> h = ImageHints.dominant(image.pixels(), 6, colours.keySet(), colours::get);
@@ -296,7 +343,7 @@ public final class AssistantPanel implements PluginPanel {
                 Assistant.Turn t = app.assistant.run(prompt, image, hints, choice, style, maxBlocks, client, new Assistant.Listener() {
                     @Override
                     public void status(String message) {
-                        ui(() -> status.setText(message));
+                        ui(() -> working(message));
                     }
 
                     @Override
@@ -322,15 +369,22 @@ public final class AssistantPanel implements PluginPanel {
                         ui(() -> turnStatus.setText((round == 0 ? "" : "Try " + (round + 1) + ": ") + msg));
                     }
                 }, cancel);
-                ui(() -> finished(aiBubble, reply, turnStatus, t));
+                ui(() -> {
+                    finished(aiBubble, reply, turnStatus, t);
+                    pageStatus(null, null);
+                });
             } catch (Cancel.CancelledException e) {
-                ui(() -> turnStatus.setText("Stopped. Nothing was changed."));
+                ui(() -> {
+                    turnStatus.setText("Stopped. Nothing was changed.");
+                    pageStatus(null, null);
+                });
             } catch (IOException | RuntimeException e) {
                 String msg = e.getMessage() == null ? e.toString() : e.getMessage();
                 app.ctx.log("Assistant: " + msg);
                 ui(() -> {
-                    turnStatus.setText(msg);
-                    turnStatus.setStyle("-fx-text-fill: -color-danger-fg; -fx-font-size: 11px;");
+                    turnStatus.setText("No answer.");
+                    banner.show(Tone.DANGER, msg, "Models…", () -> app.ctx.showPanel("models"));
+                    pageStatus(Tone.DANGER, msg);
                 });
             } finally {
                 ui(() -> {
@@ -341,6 +395,12 @@ public final class AssistantPanel implements PluginPanel {
                 });
             }
         });
+    }
+
+    /** What the answer is waiting for ("Starting the model…"), under the chat and on the page's dot. */
+    private void working(String message) {
+        status.setText(message);
+        if (running != null) pageStatus(Tone.ACCENT, message == null || message.isBlank() ? "Answering…" : message);
     }
 
     private void finished(VBox bubble, Label reply, Label turnStatus, Assistant.Turn t) {
@@ -363,10 +423,8 @@ public final class AssistantPanel implements PluginPanel {
         lines.setEditable(false);
         lines.setWrapText(true);
         lines.setPrefRowCount(Math.min(14, (int) sb.chars().filter(ch -> ch == '\n').count() + 1));
-        lines.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        TitledPane details = new TitledPane("Commands (" + t.commands().size() + ")", lines);
-        details.setExpanded(false);
-        details.setAnimated(false);
+        lines.getStyleClass().add("bd-mono");
+        Section details = new Section("Commands (" + t.commands().size() + ")", lines).collapsible(false);
 
         String result;
         if (t.applied() == null) {
@@ -382,7 +440,8 @@ public final class AssistantPanel implements PluginPanel {
         bubble.getChildren().add(details);
         if (t.applied() != null) {
             Assistant.Applied applied = t.applied();
-            Button undo = Ui.button("Undo this", null);
+            Button undo = Controls.button("Undo this", "Take this answer's changes back", null);
+            undo.getStyleClass().add("small");
             undo.setOnAction(e -> {
                 undo.setDisable(true);
                 app.workers.execute(() -> {
@@ -392,7 +451,7 @@ public final class AssistantPanel implements PluginPanel {
                     } catch (IOException ex) {
                         ui(() -> {
                             undo.setDisable(false);
-                            app.ctx.toast("Couldn't undo: " + ex.getMessage());
+                            banner.show(Tone.DANGER, "Couldn't undo: " + ex.getMessage());
                         });
                     }
                 });
@@ -402,7 +461,7 @@ public final class AssistantPanel implements PluginPanel {
     }
 
     private void setBusy(boolean busy) {
-        send.setDisable(busy);
+        Controls.busy(send, busy);
         stop.setDisable(!busy);
         attach.setDisable(busy);
     }
@@ -416,5 +475,6 @@ public final class AssistantPanel implements PluginPanel {
         if (running != null) running.cancel();
         subscriptions.forEach(Subscription::cancel);
         subscriptions.clear();
+        app.removeListener(listener);
     }
 }

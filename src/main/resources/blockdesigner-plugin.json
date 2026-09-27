@@ -6,5 +6,5 @@
   "description": "Builds and edits structures from a chat or a reference picture: \"build a small castle\", \"add a tower on the east side\". Runs a local model on your own PC by default (downloaded from its Models page), or your own local server, or your own Claude or OpenAI key. Also adds /setblock, /fill and builder commands such as /tower, /roof and /battlements to BlockEdit.",
   "updates": "https://github.com/doolecg/BlockDesigner-AIBuilder",
   "main": "io.blockdesigner.aibuilder.AiBuilderPlugin",
-  "api": 5
+  "api": 6
 }

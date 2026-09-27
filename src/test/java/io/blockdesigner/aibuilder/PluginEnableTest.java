@@ -72,6 +72,7 @@ class PluginEnableTest {
         List<PluginCommand> commands = new ArrayList<>();
         List<PluginPanel> panels = new ArrayList<>();
         List<String> log = new ArrayList<>();
+        List<io.blockdesigner.plugin.Options> settings = new ArrayList<>();
         Catalog catalog = new Catalog();
         PluginContext ctx = (PluginContext) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{PluginContext.class}, (p, m, args) ->
                 switch (m.getName()) {
@@ -95,6 +96,10 @@ class PluginEnableTest {
                         yield null;
                     }
                     case "registerPanel" -> panels.add((PluginPanel) args[0]);
+                    // API 6: settings on the Settings page, page status dots; no toolkit here, so no ui().
+                    case "registerSettings" -> settings.add((io.blockdesigner.plugin.Options) args[0]);
+                    case "setPanelStatus", "updateSettings", "showPanel", "openSettings" -> null;
+                    case "ui" -> null;
                     case "toString" -> "fake context";
                     case "hashCode" -> 0;
                     case "equals" -> false;
@@ -107,6 +112,7 @@ class PluginEnableTest {
                     .containsExactly("setblock", "fill", "tower", "roof", "battlements", "windows", "door", "gatehouse", "floors");
             assertThat(panels).extracting(PluginPanel::id).containsExactly("assistant", "models");
             assertThat(panels).extracting(PluginPanel::title).containsExactly("Assistant", "Models");
+            assertThat(settings).containsExactly(AiOptions.OPTIONS);   // its page in the Settings window
 
             // In the command bar: a BlockEdit session running the plugin's /tower.
             var world = io.blockdesigner.aibuilder.build.OverlayWorld.empty();

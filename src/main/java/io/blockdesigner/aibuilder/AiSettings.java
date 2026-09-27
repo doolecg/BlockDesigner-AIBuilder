@@ -10,8 +10,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * The plugin's own settings, in {@code settings.json} in its folder: which AI to use and how. API keys are not
- * here; they are kept encrypted by {@link io.blockdesigner.aibuilder.llm.Secrets}.
+ * The plugin's settings as the rest of the plugin reads them, also kept in {@code settings.json} in its folder. Since
+ * 0.2.0 BlockDesigner's Settings window owns all but {@link #activeModel} (see {@link AiOptions}); the file's values are
+ * moved there once ({@link #migratedToApp}). API keys are not here; they are kept encrypted by
+ * {@link io.blockdesigner.aibuilder.llm.Secrets}.
  */
 public final class AiSettings {
     /** Where the answers come from. */
@@ -46,6 +48,8 @@ public final class AiSettings {
 
     public String style = "auto";
     public int maxBlocks = 250_000;
+    /** Set once these settings have been moved to BlockDesigner's Settings window. */
+    public boolean migratedToApp;
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -72,6 +76,7 @@ public final class AiSettings {
             s.openaiModel = n.path("openaiModel").asText(s.openaiModel);
             s.style = n.path("style").asText(s.style);
             s.maxBlocks = Math.clamp(n.path("maxBlocks").asInt(s.maxBlocks), 1000, 2_000_000);
+            s.migratedToApp = n.path("migratedToApp").asBoolean(false);
         } catch (IOException e) {
             // A broken file falls back to the defaults.
         }
@@ -84,7 +89,7 @@ public final class AiSettings {
                 .put("startAtLaunch", startAtLaunch).put("idleMinutes", idleMinutes).put("contextSize", contextSize)
                 .put("localServerUrl", localServerUrl).put("localServerModel", localServerModel).put("localServerVision", localServerVision)
                 .put("claudeModel", claudeModel).put("openaiUrl", openaiUrl).put("openaiModel", openaiModel)
-                .put("style", style).put("maxBlocks", maxBlocks);
+                .put("style", style).put("maxBlocks", maxBlocks).put("migratedToApp", migratedToApp);
         Files.createDirectories(file.toAbsolutePath().getParent());
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
         JSON.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), n);

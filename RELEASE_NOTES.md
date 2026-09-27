@@ -1,3 +1,23 @@
+# AI Builder 0.2.0
+
+AI Builder's settings move to BlockDesigner's Settings window, and the Assistant and Models pages are simpler.
+
+**Needs BlockDesigner 0.4.24 or later** (plugin API 6). Older BlockDesigners keep 0.1.1 until BlockDesigner itself is updated.
+
+## New
+- **A page in the Settings window** with the settings you set once: where answers come from and the connection details for a local server, Claude or OpenAI; the engine kind, starting with BlockDesigner and stopping when unused; the **Default style**; and, under Advanced, the context size and the most blocks per answer, which you couldn't change before. Your settings move there by themselves.
+- **A status dot** on the Assistant page's button while it answers or starts the model, and when an answer failed.
+
+## Changed
+- **Assistant page:** what to work on at the top (it no longer squeezes a style box next to it; the default style is in Settings), the chat in the middle, and errors, the message box, Attach, Stop and Send at the bottom. **Other models…** now opens the Models page.
+- **Models page:** shows only what the chosen source needs: the built-in models, engine and background model; the local server; or the API key. A key is saved when you press Enter, with no Save button. The status of the chosen source is at the bottom. Deleting a model asks in BlockDesigner's own dialog.
+- **Commands** under each answer open in a small section in a monospaced font.
+
+## Fixed
+- **Pages that were closed** no longer keep listening for changes.
+
+---
+
 # AI Builder 0.1.1
 
 Kept up to date with BlockDesigner 0.4.23: built and tested against its plugin API. Nothing changes in how it works.
