@@ -1,3 +1,14 @@
+# AI Builder 0.1.1
+
+Kept up to date with BlockDesigner 0.4.23: built and tested against its plugin API. Nothing changes in how it works.
+
+**Needs BlockDesigner 0.4.17 or later** (plugin API 5).
+
+## Changed
+- Built against the BlockDesigner 0.4.23 plugin API.
+
+---
+
 # AI Builder 0.1.0
 
 The first release: build and edit structures by chatting ("build a small castle", "add a tower on the east side") or from a reference picture, with a model that runs on your own PC, your own local server, or your own Claude or OpenAI key.
