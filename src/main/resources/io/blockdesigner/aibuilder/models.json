@@ -1,0 +1,60 @@
+{
+  "models": [
+    {
+      "id": "gemma-4-e4b",
+      "name": "Gemma 4 E4B",
+      "tag": "Recommended",
+      "blurb": "Google's small multimodal model: good at following the command format, and it can look at a picture of a building.",
+      "vision": true,
+      "ram": "8 GB RAM or more (16 GB comfortable)",
+      "licence": "Apache-2.0",
+      "recommended": true,
+      "files": [
+        {"name": "gemma-4-E4B-it-Q4_0.gguf", "url": "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_0.gguf", "size": 4590807392, "role": "model"},
+        {"name": "mmproj-gemma-4-E4B-it-Q8_0.gguf", "url": "https://huggingface.co/ggml-org/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-Q8_0.gguf", "size": 559874816, "role": "mmproj"}
+      ]
+    },
+    {
+      "id": "qwen2.5-vl-3b",
+      "name": "Qwen2.5-VL 3B",
+      "tag": "Light",
+      "blurb": "Smaller and quicker, for PCs with less memory. Sees pictures; plans are simpler.",
+      "vision": true,
+      "ram": "6 GB RAM or more",
+      "licence": "Apache-2.0 (as tagged on Hugging Face)",
+      "recommended": false,
+      "files": [
+        {"name": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf", "url": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf", "size": 1929901056, "role": "model"},
+        {"name": "mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf", "url": "https://huggingface.co/ggml-org/Qwen2.5-VL-3B-Instruct-GGUF/resolve/main/mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf", "size": 844757728, "role": "mmproj"}
+      ]
+    },
+    {
+      "id": "qwen3-vl-8b",
+      "name": "Qwen3-VL 8B",
+      "tag": "Quality",
+      "blurb": "A larger model that plans bigger builds more reliably. Sees pictures. Best with a graphics card.",
+      "vision": true,
+      "ram": "12 GB RAM or more (16 GB comfortable)",
+      "licence": "Apache-2.0",
+      "recommended": false,
+      "files": [
+        {"name": "Qwen3-VL-8B-Instruct-Q4_K_M.gguf", "url": "https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/main/Qwen3-VL-8B-Instruct-Q4_K_M.gguf", "size": 5027785568, "role": "model"},
+        {"name": "mmproj-F16.gguf", "url": "https://huggingface.co/unsloth/Qwen3-VL-8B-Instruct-GGUF/resolve/main/mmproj-F16.gguf", "size": 1159030336, "role": "mmproj"}
+      ]
+    },
+    {
+      "id": "gemma-3-12b",
+      "name": "Gemma 3 12B",
+      "tag": "Big",
+      "blurb": "The largest built-in choice: the most careful plans, but slow without a strong graphics card.",
+      "vision": true,
+      "ram": "16 GB RAM or more (24 GB comfortable)",
+      "licence": "Gemma Terms of Use",
+      "recommended": false,
+      "files": [
+        {"name": "gemma-3-12b-it-Q4_K_M.gguf", "url": "https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf", "size": 7300574976, "role": "model"},
+        {"name": "mmproj-model-f16.gguf", "url": "https://huggingface.co/ggml-org/gemma-3-12b-it-GGUF/resolve/main/mmproj-model-f16.gguf", "size": 854200224, "role": "mmproj"}
+      ]
+    }
+  ]
+}
