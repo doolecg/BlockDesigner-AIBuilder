@@ -1,3 +1,14 @@
+# AI Builder 0.2.1
+
+Kept up to date with BlockDesigner 0.4.27: built and tested against its plugin API. Nothing changes in how it works.
+
+**Needs BlockDesigner 0.4.24 or later** (plugin API 6). Older BlockDesigners keep 0.1.1 until BlockDesigner itself is updated.
+
+## Changed
+- Built against the BlockDesigner 0.4.27 plugin API.
+
+---
+
 # AI Builder 0.2.0
 
 AI Builder's settings move to BlockDesigner's Settings window, and the Assistant and Models pages are simpler.
